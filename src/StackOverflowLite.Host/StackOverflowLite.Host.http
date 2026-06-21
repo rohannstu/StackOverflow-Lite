@@ -1,0 +1,6 @@
+@StackOverflowLite.Host_HostAddress = http://localhost:5001
+
+GET {{StackOverflowLite.Host_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

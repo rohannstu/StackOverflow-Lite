@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/StackOverflowLite.Application/StackOverflowLite.Application.csproj" />
+    <Project Path="src/StackOverflowLite.Domain/StackOverflowLite.Domain.csproj" />
+    <Project Path="src/StackOverflowLite.Host/StackOverflowLite.Host.csproj" />
+    <Project Path="src/StackOverflowLite.Infrastructure/StackOverflowLite.Infrastructure.csproj" />
+  </Folder>
+</Solution>
