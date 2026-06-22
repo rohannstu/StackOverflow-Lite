@@ -2,6 +2,6 @@ namespace StackOverflowLite.Domain.Enums;
 
 public enum VoteType
 {
-    Upvote,
-    Downvote
+    Upvote = 1,
+    Downvote = -1
 }
