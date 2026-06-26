@@ -1,16 +1,31 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Serilog;
 using StackOverflowLite.Application.Behaviors;
 using StackOverflowLite.Application.Interfaces;
 using StackOverflowLite.Host.Middleware;
 using StackOverflowLite.Host.Services;
 using StackOverflowLite.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+
+// Configure Serilog early so it captures startup logs
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day,
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Use Serilog for logging
+builder.Host.UseSerilog();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -24,12 +39,41 @@ builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(IAppl
 // Add FluentValidation validators
 builder.Services.AddValidatorsFromAssembly(typeof(IApplicationDbContext).Assembly);
 
-// Add MediatR pipeline behaviors
+// Add MediatR pipeline behaviors (order matters: Logging -> Validation)
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
 // Add Current User context
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
+// Add Rate Limiting (100 requests per minute per IP)
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("fixed", httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 4,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+});
 
 // Add JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -76,6 +120,11 @@ builder.Services.AddSwaggerGen(c =>
             new List<string>()
         }
     });
+
+    // Set the comments path for the Swagger JSON and UI.
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    c.IncludeXmlComments(xmlPath);
 });
 
 var app = builder.Build();
@@ -93,12 +142,37 @@ if (app.Environment.IsDevelopment())
 // Global exception handling
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
+// Serilog request logging
+app.UseSerilogRequestLogging();
+
 app.UseHttpsRedirection();
+
+// CORS
+app.UseCors("AllowAll");
+
+// Rate Limiting
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers().RequireRateLimiting("fixed");
+
+// Apply migrations on startup if configured
+if (Environment.GetEnvironmentVariable("APPLY_MIGRATIONS") == "true")
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<StackOverflowLite.Infrastructure.Persistence.ApplicationDbContext>();
+    try
+    {
+        Log.Information("Applying database migrations...");
+        dbContext.Database.Migrate();
+        Log.Information("Database migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "An error occurred while applying the database migrations.");
+    }
+}
 
 app.Run();
-

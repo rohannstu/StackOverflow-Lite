@@ -1,3 +1,3 @@
 namespace StackOverflowLite.Application.Features.Questions.DTOs;
 
-public record CreateQuestionDto(string Title, string Description);
+public record CreateQuestionDto(string Title, string Description, List<string> Tags);

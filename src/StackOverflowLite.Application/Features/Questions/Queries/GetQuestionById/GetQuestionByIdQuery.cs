@@ -44,6 +44,8 @@ public class GetQuestionByIdQueryHandler : IRequestHandler<GetQuestionByIdQuery,
             .Include(q => q.Author)
             .Include(q => q.Answers)
             .Include(q => q.Votes)
+            .Include(q => q.QuestionTags)
+            .ThenInclude(qt => qt.Tag)
             .FirstOrDefaultAsync(q => q.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Question", request.Id);
 
@@ -57,6 +59,7 @@ public class GetQuestionByIdQueryHandler : IRequestHandler<GetQuestionByIdQuery,
             question.AcceptedAnswerId,
             question.Votes.Sum(v => (int)v.Type),
             question.Answers.Count,
+            question.QuestionTags.Select(qt => qt.Tag.Name).ToList(),
             question.CreatedAt,
             question.UpdatedAt
         );
