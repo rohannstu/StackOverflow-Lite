@@ -43,6 +43,8 @@ public class GetQuestionsQueryHandler : IRequestHandler<GetQuestionsQuery, Paged
             .Include(q => q.Author)
             .Include(q => q.Answers)
             .Include(q => q.Votes)
+            .Include(q => q.QuestionTags)
+            .ThenInclude(qt => qt.Tag)
             .OrderByDescending(q => q.CreatedAt);
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -60,6 +62,7 @@ public class GetQuestionsQueryHandler : IRequestHandler<GetQuestionsQuery, Paged
                 q.AcceptedAnswerId,
                 q.Votes.Sum(v => (int)v.Type),
                 q.Answers.Count,
+                q.QuestionTags.Select(qt => qt.Tag.Name).ToList(),
                 q.CreatedAt,
                 q.UpdatedAt
             ))

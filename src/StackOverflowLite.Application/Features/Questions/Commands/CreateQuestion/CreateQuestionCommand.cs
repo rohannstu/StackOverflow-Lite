@@ -6,7 +6,7 @@ using StackOverflowLite.Domain.Entities;
 
 namespace StackOverflowLite.Application.Features.Questions.Commands.CreateQuestion;
 
-public record CreateQuestionCommand(string Title, string Description) : IRequest<QuestionDto>;
+public record CreateQuestionCommand(string Title, string Description, List<string> Tags) : IRequest<QuestionDto>;
 
 public class CreateQuestionCommandHandler : IRequestHandler<CreateQuestionCommand, QuestionDto>
 {
@@ -34,6 +34,43 @@ public class CreateQuestionCommandHandler : IRequestHandler<CreateQuestionComman
             CreatedAt = DateTime.UtcNow
         };
 
+        // Handle Tags
+        var uniqueTags = request.Tags
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t.Trim().ToLower())
+            .Distinct()
+            .ToList();
+
+        if (uniqueTags.Any())
+        {
+            var existingTags = await _context.Tags
+                .Where(t => uniqueTags.Contains(t.Name))
+                .ToListAsync(cancellationToken);
+
+            var existingTagNames = existingTags.Select(t => t.Name).ToHashSet();
+
+            var newTags = uniqueTags
+                .Where(t => !existingTagNames.Contains(t))
+                .Select(t => new Tag { Name = t })
+                .ToList();
+
+            if (newTags.Any())
+            {
+                _context.Tags.AddRange(newTags);
+            }
+
+            var allTags = existingTags.Concat(newTags).ToList();
+
+            foreach (var tag in allTags)
+            {
+                question.QuestionTags.Add(new QuestionTag
+                {
+                    Question = question,
+                    Tag = tag
+                });
+            }
+        }
+
         _context.Questions.Add(question);
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -43,6 +80,8 @@ public class CreateQuestionCommandHandler : IRequestHandler<CreateQuestionComman
         // Reload with author navigation
         var created = await _context.Questions
             .Include(q => q.Author)
+            .Include(q => q.QuestionTags)
+            .ThenInclude(qt => qt.Tag)
             .FirstAsync(q => q.Id == question.Id, cancellationToken);
 
         return new QuestionDto(
@@ -55,6 +94,7 @@ public class CreateQuestionCommandHandler : IRequestHandler<CreateQuestionComman
             created.AcceptedAnswerId,
             0, // VoteScore — fresh question
             0, // AnswerCount
+            created.QuestionTags.Select(qt => qt.Tag.Name).ToList(),
             created.CreatedAt,
             created.UpdatedAt
         );

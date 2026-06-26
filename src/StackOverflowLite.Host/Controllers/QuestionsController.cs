@@ -50,7 +50,7 @@ public class QuestionsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<QuestionDto>> Create([FromBody] CreateQuestionDto dto)
     {
-        var command = new CreateQuestionCommand(dto.Title, dto.Description);
+        var command = new CreateQuestionCommand(dto.Title, dto.Description, dto.Tags ?? new List<string>());
         var result = await _sender.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
@@ -62,7 +62,7 @@ public class QuestionsController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<ActionResult<QuestionDto>> Update(int id, [FromBody] UpdateQuestionDto dto)
     {
-        var command = new UpdateQuestionCommand(id, dto.Title, dto.Description);
+        var command = new UpdateQuestionCommand(id, dto.Title, dto.Description, dto.Tags ?? new List<string>());
         var result = await _sender.Send(command);
         return Ok(result);
     }

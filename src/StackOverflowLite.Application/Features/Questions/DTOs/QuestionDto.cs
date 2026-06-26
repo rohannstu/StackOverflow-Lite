@@ -10,6 +10,7 @@ public record QuestionDto(
     int? AcceptedAnswerId,
     int VoteScore,
     int AnswerCount,
+    List<string> Tags,
     DateTime CreatedAt,
     DateTime? UpdatedAt
 );
