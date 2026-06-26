@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: stackoverflow-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: StackOverflowLite
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: stackoverflow-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stackoverflow-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=db;Database=StackOverflowLite;Username=postgres;Password=mysecretpassword;
+      - Redis__ConnectionString=redis:6379
+      - JwtSettings__Secret=SuperSecretKeyForJwtTokenGenerationThatIsLongEnough
+      - JwtSettings__Issuer=StackOverflowLite
+      - JwtSettings__Audience=StackOverflowLite
+      - APPLY_MIGRATIONS=true
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+volumes:
+  pgdata:

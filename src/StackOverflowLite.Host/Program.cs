@@ -12,6 +12,7 @@ using StackOverflowLite.Application.Interfaces;
 using StackOverflowLite.Host.Middleware;
 using StackOverflowLite.Host.Services;
 using StackOverflowLite.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 // Configure Serilog early so it captures startup logs
 Log.Logger = new LoggerConfiguration()
@@ -151,5 +152,22 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers().RequireRateLimiting("fixed");
+
+// Apply migrations on startup if configured
+if (Environment.GetEnvironmentVariable("APPLY_MIGRATIONS") == "true")
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<StackOverflowLite.Infrastructure.Persistence.ApplicationDbContext>();
+    try
+    {
+        Log.Information("Applying database migrations...");
+        dbContext.Database.Migrate();
+        Log.Information("Database migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "An error occurred while applying the database migrations.");
+    }
+}
 
 app.Run();
