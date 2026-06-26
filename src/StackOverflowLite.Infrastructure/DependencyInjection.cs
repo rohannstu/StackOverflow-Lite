@@ -6,6 +6,7 @@ using StackOverflowLite.Application.Interfaces;
 using StackOverflowLite.Domain.Entities;
 using StackOverflowLite.Infrastructure.Identity;
 using StackOverflowLite.Infrastructure.Persistence;
+using StackOverflowLite.Infrastructure.Services;
 
 namespace StackOverflowLite.Infrastructure;
 
@@ -32,8 +33,22 @@ public static class DependencyInjection
             .AddDefaultTokenProviders();
 
         services.AddScoped<IJwtTokenService, JwtTokenService>();
+
+        // Add Redis Distributed Cache
+        var redisConfig = configuration.GetConnectionString("Redis") ?? "localhost:6379";
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConfig;
+            options.InstanceName = "StackOverflowLite_";
+        });
+        
+        // Register IConnectionMultiplexer for advanced Redis commands (like prefix deletion)
+        services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(
+            StackExchange.Redis.ConnectionMultiplexer.Connect(redisConfig));
+
+        // Register ICacheService
+        services.AddScoped<ICacheService, RedisCacheService>();
         
         return services;
     }
 }
-

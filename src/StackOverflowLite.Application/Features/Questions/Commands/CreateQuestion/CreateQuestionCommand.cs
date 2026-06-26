@@ -12,11 +12,13 @@ public class CreateQuestionCommandHandler : IRequestHandler<CreateQuestionComman
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICacheService _cacheService;
 
-    public CreateQuestionCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
+    public CreateQuestionCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService, ICacheService cacheService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _cacheService = cacheService;
     }
 
     public async Task<QuestionDto> Handle(CreateQuestionCommand request, CancellationToken cancellationToken)
@@ -34,6 +36,9 @@ public class CreateQuestionCommandHandler : IRequestHandler<CreateQuestionComman
 
         _context.Questions.Add(question);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate paginated queries
+        await _cacheService.RemoveByPrefixAsync("questions_page_", cancellationToken);
 
         // Reload with author navigation
         var created = await _context.Questions

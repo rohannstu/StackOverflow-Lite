@@ -13,11 +13,13 @@ public class CreateAnswerCommandHandler : IRequestHandler<CreateAnswerCommand, A
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICacheService _cacheService;
 
-    public CreateAnswerCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
+    public CreateAnswerCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService, ICacheService cacheService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _cacheService = cacheService;
     }
 
     public async Task<AnswerDto> Handle(CreateAnswerCommand request, CancellationToken cancellationToken)
@@ -43,6 +45,9 @@ public class CreateAnswerCommandHandler : IRequestHandler<CreateAnswerCommand, A
 
         _context.Answers.Add(answer);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await _cacheService.RemoveAsync($"question_{request.QuestionId}", cancellationToken);
+        await _cacheService.RemoveByPrefixAsync("questions_page_", cancellationToken);
 
         // Reload with Author navigation
         var created = await _context.Answers

@@ -17,16 +17,26 @@ public record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, i
 public class GetQuestionsQueryHandler : IRequestHandler<GetQuestionsQuery, PagedResult<QuestionDto>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cacheService;
 
-    public GetQuestionsQueryHandler(IApplicationDbContext context)
+    public GetQuestionsQueryHandler(IApplicationDbContext context, ICacheService cacheService)
     {
         _context = context;
+        _cacheService = cacheService;
     }
 
     public async Task<PagedResult<QuestionDto>> Handle(GetQuestionsQuery request, CancellationToken cancellationToken)
     {
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 50);
+
+        var cacheKey = $"questions_page_{page}_size_{pageSize}";
+        var cachedResult = await _cacheService.GetAsync<PagedResult<QuestionDto>>(cacheKey, cancellationToken);
+        
+        if (cachedResult != null)
+        {
+            return cachedResult;
+        }
 
         var query = _context.Questions
             .AsNoTracking()
@@ -55,6 +65,11 @@ public class GetQuestionsQueryHandler : IRequestHandler<GetQuestionsQuery, Paged
             ))
             .ToListAsync(cancellationToken);
 
-        return new PagedResult<QuestionDto>(items, totalCount, page, pageSize);
+        var result = new PagedResult<QuestionDto>(items, totalCount, page, pageSize);
+
+        // Cache for 5 minutes
+        await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5), cancellationToken);
+
+        return result;
     }
 }
