@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StackOverflowLite.Application.Features.Answers.Commands.AcceptAnswer;
+using StackOverflowLite.Application.Features.Answers.Commands.UnacceptAnswer;
 using StackOverflowLite.Application.Features.Questions.Commands.CreateQuestion;
 using StackOverflowLite.Application.Features.Questions.Commands.DeleteQuestion;
 using StackOverflowLite.Application.Features.Questions.Commands.UpdateQuestion;
@@ -75,4 +77,27 @@ public class QuestionsController : ControllerBase
         await _sender.Send(new DeleteQuestionCommand(id));
         return NoContent();
     }
+
+    /// <summary>
+    /// Accept an answer for a question. Only the question author can accept.
+    /// </summary>
+    [Authorize]
+    [HttpPost("{questionId:int}/accept/{answerId:int}")]
+    public async Task<IActionResult> AcceptAnswer(int questionId, int answerId)
+    {
+        await _sender.Send(new AcceptAnswerCommand(questionId, answerId));
+        return Ok(new { message = "Answer accepted successfully." });
+    }
+
+    /// <summary>
+    /// Unaccept the current accepted answer. Only the question author can unaccept.
+    /// </summary>
+    [Authorize]
+    [HttpDelete("{questionId:int}/accept")]
+    public async Task<IActionResult> UnacceptAnswer(int questionId)
+    {
+        await _sender.Send(new UnacceptAnswerCommand(questionId));
+        return Ok(new { message = "Answer unaccepted successfully." });
+    }
 }
+
