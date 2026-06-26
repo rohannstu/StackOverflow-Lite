@@ -12,11 +12,13 @@ public class UpdateQuestionCommandHandler : IRequestHandler<UpdateQuestionComman
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICacheService _cacheService;
 
-    public UpdateQuestionCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
+    public UpdateQuestionCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService, ICacheService cacheService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _cacheService = cacheService;
     }
 
     public async Task<QuestionDto> Handle(UpdateQuestionCommand request, CancellationToken cancellationToken)
@@ -41,6 +43,9 @@ public class UpdateQuestionCommandHandler : IRequestHandler<UpdateQuestionComman
         question.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await _cacheService.RemoveAsync($"question_{question.Id}", cancellationToken);
+        await _cacheService.RemoveByPrefixAsync("questions_page_", cancellationToken);
 
         return new QuestionDto(
             question.Id,

@@ -13,11 +13,13 @@ public class CastVoteCommandHandler : IRequestHandler<CastVoteCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICacheService _cacheService;
 
-    public CastVoteCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
+    public CastVoteCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService, ICacheService cacheService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _cacheService = cacheService;
     }
 
     public async Task<Unit> Handle(CastVoteCommand request, CancellationToken cancellationToken)
@@ -30,12 +32,15 @@ public class CastVoteCommandHandler : IRequestHandler<CastVoteCommand, Unit>
 
         // 1. Fetch target entity and author to validate and apply reputation
         string targetAuthorId;
+        int? rootQuestionId = null;
+
         if (contentType == ContentType.Question)
         {
             var question = await _context.Questions
                 .FirstOrDefaultAsync(q => q.Id == targetId, cancellationToken)
                 ?? throw new NotFoundException("Question", targetId);
             targetAuthorId = question.AuthorId;
+            rootQuestionId = targetId;
         }
         else
         {
@@ -43,6 +48,7 @@ public class CastVoteCommandHandler : IRequestHandler<CastVoteCommand, Unit>
                 .FirstOrDefaultAsync(a => a.Id == targetId, cancellationToken)
                 ?? throw new NotFoundException("Answer", targetId);
             targetAuthorId = answer.AuthorId;
+            rootQuestionId = answer.QuestionId;
         }
 
         // 2. Prevent self-voting
@@ -101,6 +107,12 @@ public class CastVoteCommandHandler : IRequestHandler<CastVoteCommand, Unit>
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        if (rootQuestionId.HasValue)
+        {
+            await _cacheService.RemoveAsync($"question_{rootQuestionId.Value}", cancellationToken);
+            await _cacheService.RemoveByPrefixAsync("questions_page_", cancellationToken);
+        }
 
         return Unit.Value;
     }

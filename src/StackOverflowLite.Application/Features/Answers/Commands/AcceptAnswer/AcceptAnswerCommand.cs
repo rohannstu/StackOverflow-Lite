@@ -11,11 +11,13 @@ public class AcceptAnswerCommandHandler : IRequestHandler<AcceptAnswerCommand, U
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICacheService _cacheService;
 
-    public AcceptAnswerCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
+    public AcceptAnswerCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService, ICacheService cacheService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _cacheService = cacheService;
     }
 
     public async Task<Unit> Handle(AcceptAnswerCommand request, CancellationToken cancellationToken)
@@ -91,6 +93,9 @@ public class AcceptAnswerCommandHandler : IRequestHandler<AcceptAnswerCommand, U
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await _cacheService.RemoveAsync($"question_{request.QuestionId}", cancellationToken);
+        await _cacheService.RemoveByPrefixAsync("questions_page_", cancellationToken);
 
         return Unit.Value;
     }

@@ -11,11 +11,13 @@ public class DeleteAnswerCommandHandler : IRequestHandler<DeleteAnswerCommand, U
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICacheService _cacheService;
 
-    public DeleteAnswerCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
+    public DeleteAnswerCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService, ICacheService cacheService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _cacheService = cacheService;
     }
 
     public async Task<Unit> Handle(DeleteAnswerCommand request, CancellationToken cancellationToken)
@@ -39,6 +41,9 @@ public class DeleteAnswerCommandHandler : IRequestHandler<DeleteAnswerCommand, U
 
         _context.Answers.Remove(answer);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await _cacheService.RemoveAsync($"question_{answer.QuestionId}", cancellationToken);
+        await _cacheService.RemoveByPrefixAsync("questions_page_", cancellationToken);
 
         return Unit.Value;
     }
